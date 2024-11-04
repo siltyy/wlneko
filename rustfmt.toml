@@ -1,0 +1,6 @@
+hard_tabs = true
+tab_spaces = 4
+chain_width = 100
+imports_granularity = "Crate"
+struct_field_align_threshold = 20
+enum_discrim_align_threshold = 20

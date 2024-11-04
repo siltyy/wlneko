@@ -1,0 +1,25 @@
+[package]
+name = "wlneko"
+authors = ["silt!"]
+description = "cat follow mouse (real)"
+license = "AGPL-3.0-or-later"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+opt-level = 3
+strip = true
+rpath = false
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+image = { version = "0.25.4", default-features = false, features = ["png"] }
+notify = { version = "7.0.0", default-features = false }
+redhook = "2.0.0"
+smithay-client-toolkit = { version = "0.19.2", default-features = false }
+wayland-client = "0.31.6"

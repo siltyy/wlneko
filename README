@@ -1,0 +1,71 @@
+                                     wlneko
+                             cat follow mouse (real)
+                                  (c) 2024 silt
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+{x,w,o}neko, blindly ported to wayland for wlroots-based compositors. definitely
+tested on compositors other than sway :)
+
+wlneko was brought into existence to prove that it could be; don't expect any
+fancy features and be thankful the compositor doesn't need to get restarted to
+re-skin the cat. patches, praise, and hatemail all welcome.
+
+"but how can this exist, o wise one? is wayland not the work of the demiurge and
+whatnot in that it disallows clients from fetching global pointer coordinates
+among other things?" thankfully, wayland's security is no match for linux's
+distinct lack thereof, and cursor movements can be directly intercepted through
+ld preload hooking. if you're a compositor dev, hi ^-^ and also please don't
+start statically linking wlroots. this will still be possible, just really
+annoying.
+
+
+Building
+--------
+
+the nightly toolchain is required.
+
+	$ cargo rustc --release -- --emit link=wlneko.so
+
+
+Usage
+-----
+
+it seems like `LD_PRELOAD` doesn't have any effect on sway, so the preloading
+will need to be done manually with `ld-linux.so`. this is preferable anyways,
+since it avoids the variable potentially propegating.
+
+	$ /lib64/ld-linux-x86-64.so* --preload /absolute/path/to/wlneko.so \
+	/usr/bin/sway [sway options]
+
+
+there are extra skins that are not shipped with wlneko for licensing reasons. a
+script is included to download them in bulk. note that this requires `curl` and
+will make a series of https requests to neocities.org. to run (very difficult!):
+
+	$ ./download_spritesheets.sh
+
+
+wlneko will attempt to read its skin from `<working dir>/neko.png`. if this file
+is updated, so too is the sprite. if at any point this process should fail,
+wlneko will fall back to an embedded skin.
+
+
+Todo
+----
+
+- span across multiple monitors instead of doing whatever it does right now
+- fix bugs
+
+
+Bugs
+----
+
+under certain conditions, the sprite will change its visual direction long
+before actually moving in that direction. this is probably a simple fix.
+
+
+Acknowledgements
+----------------
+
+- Kenji Gotoh: neko DA, the source of the original neko graphics
+- bomvel: a very scrapeable archive of neko skins

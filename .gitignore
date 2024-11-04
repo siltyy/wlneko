@@ -1,0 +1,8 @@
+/target
+/wlneko.so
+
+# only keep the public domain stuff
+/assets/*
+!/assets/neko.png
+!/assets/tabby.png
+!/assets/dog.png
