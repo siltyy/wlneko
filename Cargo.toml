@@ -18,8 +18,8 @@ panic = "abort"
 crate-type = ["cdylib"]
 
 [dependencies]
-image = { version = "0.25.4", default-features = false, features = ["png"] }
-notify = { version = "7.0.0", default-features = false }
+image = { version = "0.25.2", default-features = false, features = ["png"] }
+notify = { version = "7.0.0", default-features = false, features = ["kqueue"] }
 redhook = "2.0.0"
 smithay-client-toolkit = { version = "0.19.2", default-features = false }
 wayland-client = "0.31.6"
