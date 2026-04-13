@@ -21,7 +21,7 @@ mod atomic_f64;
 use atomic_f64::AtomicF64;
 
 use image::{GenericImageView, ImageBuffer, ImageReader, Pixel, Rgba};
-use notify::{Config, INotifyWatcher, Watcher};
+use notify::{Watcher};
 use smithay_client_toolkit::{
 	compositor::{CompositorHandler, CompositorState, Region},
 	delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_shm,
@@ -369,7 +369,7 @@ static IDLE_FRAME: AtomicUsize = AtomicUsize::new(0);
 
 // it's the only way, actually
 fn skin_cat() {
-	yap!("loading spritesheet from neko.png");
+	yap!("attempting to load spritesheet from neko.png");
 	let first_time = SPRITESHEET.lock().unwrap().is_empty();
 	let mut img = if let Ok(img) =
 		env::current_dir().map(|x| Path::join(&x, "neko.png")).and_then(ImageReader::open)
@@ -502,7 +502,7 @@ fn init() {
 		let watcher_tx = watcher_tx.clone();
 		thread::spawn(move || {
 			let cwd = env::current_dir().expect("cwd is borked");
-			let mut watcher = INotifyWatcher::new(watcher_tx, Config::default()).unwrap();
+			let mut watcher = notify::recommended_watcher(watcher_tx).unwrap();
 			watcher.watch(&cwd, notify::RecursiveMode::NonRecursive).unwrap();
 
 			for res in watcher_rx {
@@ -511,6 +511,9 @@ fn init() {
 						kind:
 							notify::EventKind::Access(notify::event::AccessKind::Close(
 								notify::event::AccessMode::Write,
+							))
+							| notify::EventKind::Modify(notify::event::ModifyKind::Data(
+								notify::event::DataChange::Any,
 							))
 							| notify::EventKind::Create(notify::event::CreateKind::File),
 						paths,
