@@ -47,8 +47,8 @@ to run (very difficult!):
 	$ ./download_spritesheets.sh
 
 
-wlneko will attempt to read its skin from `<working dir>/sheet.png`. if this file
-is updated, so too is the sprite. if at any point this process should fail,
+wlneko will attempt to read its skin from `<working dir>/sheet.png`. if this
+file is updated, so too is the sprite. if at any point this process should fail,
 wlneko will fall back to an embedded skin.
 
 
