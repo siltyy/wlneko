@@ -369,10 +369,10 @@ static IDLE_FRAME: AtomicUsize = AtomicUsize::new(0);
 
 // it's the only way, actually
 fn skin_cat() {
-	yap!("attempting to load spritesheet from neko.png");
+	yap!("attempting to load spritesheet from sheet.png");
 	let first_time = SPRITESHEET.lock().unwrap().is_empty();
 	let mut img = if let Ok(img) =
-		env::current_dir().map(|x| Path::join(&x, "neko.png")).and_then(ImageReader::open)
+		env::current_dir().map(|x| Path::join(&x, "sheet.png")).and_then(ImageReader::open)
 	{
 		if let Ok(img) = img.decode().map(|x| x.to_rgba8()) {
 			img
@@ -518,7 +518,10 @@ fn init() {
 							| notify::EventKind::Create(notify::event::CreateKind::File),
 						paths,
 						..
-					} if paths.len() == 1 && paths[0] == cwd.join("neko.png") => skin_cat(),
+					} if paths.len() == 1 && paths[0] == cwd.join("sheet.png") => {
+						yap!("potential spritesheet update detected");
+						skin_cat()
+					},
 					notify::Event {
 						kind: notify::EventKind::Other,
 						paths: _,
