@@ -39,8 +39,10 @@ since it avoids the variable potentially propegating.
 
 
 there are extra skins that are not shipped with wlneko for licensing reasons. a
-script is included to download them in bulk. note that this requires `curl` and
-will make a series of https requests to neocities.org. to run (very difficult!):
+script is included to download them in bulk. note that this requires `curl(1)`
+or `ftp(1)` and will make a series of https requests to neocities.org.
+
+to run (very difficult!):
 
 	$ ./download_spritesheets.sh
 
