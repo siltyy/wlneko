@@ -16,10 +16,6 @@
  * along with this program. If not, see https://www.gnu.org/licenses/.
  */
 
-#![allow(internal_features)]
-#![feature(lazy_get)]
-#![feature(core_intrinsics)]
-
 mod atomic_f64;
 
 use atomic_f64::AtomicF64;
@@ -43,7 +39,7 @@ use smithay_client_toolkit::{
 use std::{
 	env,
 	ffi::{c_double, c_void},
-	intrinsics::unlikely,
+	hint::cold_path,
 	ops::Sub,
 	path::Path,
 	sync::{
@@ -58,6 +54,14 @@ use wayland_client::{
 	protocol::{wl_output, wl_shm, wl_surface},
 	Connection, QueueHandle,
 };
+
+#[inline(always)]                       
+pub const fn unlikely(b: bool) -> bool {
+	if b {
+		cold_path();
+	}
+	b
+}
 
 struct ClientState {
 	registry_state:  RegistryState,
