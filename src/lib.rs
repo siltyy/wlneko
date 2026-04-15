@@ -357,7 +357,7 @@ struct wlr_cursor {
 static INIT_ALREADY: AtomicBool = AtomicBool::new(false);
 
 static POINTER_COORDS: (AtomicF64, AtomicF64) = (AtomicF64::new(0.0), AtomicF64::new(0.0));
-static NEKO_COORDS: (AtomicU32, AtomicU32) = (AtomicU32::new(0), AtomicU32::new(0));
+static NEKO_COORDS: (AtomicU32, AtomicU32) = (AtomicU32::new(SPRITE_SIZE/2), AtomicU32::new(SPRITE_SIZE/2));
 
 const SPRITE_SIZE: u32 = 32;
 const SPRITE_BORDER_WIDTH: u32 = 1;
