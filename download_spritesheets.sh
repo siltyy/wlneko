@@ -15,4 +15,4 @@ fetch https://bomvel.neocities.org/neko/ \
   | sed -E 's#.*src="./sheets/([[:print:]]+\.png)".*#https://bomvel.neocities.org/neko/sheets/\1#g' \
   | while read -r i ;do dl "$i" & done
 
-cd "$CWD
+cd "$CWD"
