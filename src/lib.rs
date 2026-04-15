@@ -43,11 +43,10 @@ use std::{
 	ops::Sub,
 	path::Path,
 	sync::{
-		atomic::{self, AtomicBool, AtomicU32, AtomicUsize},
-		LazyLock, Mutex,
+		LazyLock, Mutex, atomic::{self, AtomicBool, AtomicU32, AtomicUsize}
 	},
 	thread,
-	time::Duration,
+	time::{self, Duration},
 };
 use wayland_client::{
 	globals::registry_queue_init,
@@ -204,6 +203,8 @@ impl ShmHandler for ClientState {
 
 impl ClientState {
 	pub fn draw(&mut self, qh: &QueueHandle<Self>) {
+		let frame_start = time::Instant::now();
+		
 		let width = self.width;
 		let height = self.height;
 		let stride = self.width as i32 * 4;
@@ -328,8 +329,7 @@ impl ClientState {
 		buffer.attach_to(self.layer.wl_surface()).expect("buffer attach");
 		self.layer.commit();
 
-		// crude frame timing, can def be improved
-		thread::sleep(Duration::from_millis(8));
+		thread::sleep(Duration::from_millis(12).saturating_sub(frame_start.elapsed()));
 	}
 }
 
