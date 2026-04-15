@@ -448,7 +448,6 @@ unsafe extern "C" fn hook(
 	delta_y: c_double,
 ) {
 	if unlikely(!INIT_ALREADY.swap(true, atomic::Ordering::Relaxed)) {
-		cold_path();
 		yap!("hit first cursor movement; attempting to init wayland client and set up hook");
 		thread::spawn(client_init);
 	}
