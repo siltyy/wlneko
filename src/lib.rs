@@ -21,7 +21,7 @@ mod atomic_f64;
 use atomic_f64::AtomicF64;
 
 use image::{GenericImageView, ImageBuffer, ImageReader, Pixel, Rgba};
-use notify::{Watcher};
+use notify::Watcher;
 use smithay_client_toolkit::{
 	compositor::{CompositorHandler, CompositorState, Region},
 	delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_shm,
@@ -38,13 +38,13 @@ use smithay_client_toolkit::{
 };
 use std::{
 	env,
-	ffi::{c_double, c_void},
+	ffi::{c_char, c_double, c_void},
 	hint::cold_path,
 	ops::Sub,
 	path::Path,
 	sync::{
 		atomic::{self, AtomicBool, AtomicU32, AtomicUsize},
-		Mutex,
+		LazyLock, Mutex,
 	},
 	thread,
 	time::Duration,
@@ -55,7 +55,7 @@ use wayland_client::{
 	Connection, QueueHandle,
 };
 
-#[inline(always)]                       
+#[inline(always)]
 pub const fn unlikely(b: bool) -> bool {
 	if b {
 		cold_path();
@@ -422,18 +422,41 @@ fn skin_cat() {
 		.collect();
 }
 
-redhook::hook! {
-	unsafe fn wlr_cursor_move(cur: *mut wlr_cursor, dev: *mut c_void, delta_x: c_double, delta_y: c_double) => cursor_hook {
-		if unlikely(!INIT_ALREADY.swap(true, atomic::Ordering::Relaxed)) {
-			yap!("hit first cursor movement; attempting to init wayland client");
-			thread::spawn(init);
-		}
+#[link(name = "dl")]
+unsafe extern "C" {
+	unsafe fn dlsym(handle: *const c_void, symbol: *const c_char) -> *const c_void;
+}
 
-		POINTER_COORDS.0.store((*cur).x, atomic::Ordering::SeqCst);
-		POINTER_COORDS.1.store((*cur).y, atomic::Ordering::SeqCst);
+const RTLD_NEXT: *const c_void = -1_isize as *const c_void;  // not specified by POSIX but seems universal enough
 
-		redhook::real!(wlr_cursor_move)(cur, dev, delta_x, delta_y);
+type WlrCursorMove = unsafe extern "C" fn(*const wlr_cursor, *const c_void, c_double, c_double);
+
+#[allow(non_upper_case_globals)]  // it's baaasically a function :)
+static wlr_cursor_move: LazyLock<WlrCursorMove> = LazyLock::new(|| unsafe {
+	let real = dlsym(RTLD_NEXT, c"wlr_cursor_move".as_ptr());
+	if real.is_null() {
+		panic!("couldn't find hook target `wlr_cursor_move` in address space");
 	}
+	std::mem::transmute(real)
+});
+
+#[unsafe(export_name = "wlr_cursor_move")]
+unsafe extern "C" fn hook(
+	cur: *const wlr_cursor,
+	dev: *const c_void,
+	delta_x: c_double,
+	delta_y: c_double,
+) {
+	if unlikely(!INIT_ALREADY.swap(true, atomic::Ordering::Relaxed)) {
+		cold_path();
+		yap!("hit first cursor movement; attempting to init wayland client and set up hook");
+		thread::spawn(client_init);
+	}
+
+	POINTER_COORDS.0.store((*cur).x, atomic::Ordering::SeqCst);
+	POINTER_COORDS.1.store((*cur).y, atomic::Ordering::SeqCst);
+
+	wlr_cursor_move(cur, dev, delta_x, delta_y);
 }
 
 #[macro_export]
@@ -445,8 +468,8 @@ macro_rules! yap {
 	}};
 }
 
-fn init() {
-	yap!("successfully entered init; proceeding");
+fn client_init() {
+	yap!("successfully entered client init; proceeding");
 
 	skin_cat();
 
