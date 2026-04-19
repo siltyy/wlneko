@@ -22,7 +22,7 @@ annoying.
 Building
 --------
 
-the nightly toolchain may be requried on older rust versions.
+the nightly toolchain may be required on older rust versions.
 
 	$ cargo rustc --release -- --emit link=wlneko.so
 
