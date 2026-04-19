@@ -25,33 +25,23 @@ use notify::Watcher;
 use smithay_client_toolkit::{
 	compositor::{CompositorHandler, CompositorState, Region},
 	delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_shm,
-	output::{OutputHandler, OutputState},
+	output::{OutputHandler, OutputInfo, OutputState},
 	registry::{ProvidesRegistryState, RegistryState},
 	registry_handlers,
 	shell::{
-		wlr_layer::{
+		WaylandSurface, wlr_layer::{
 			self, Anchor, LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
-		},
-		WaylandSurface,
+		}
 	},
-	shm::{slot::SlotPool, Shm, ShmHandler},
+	shm::{Shm, ShmHandler, slot::SlotPool},
 };
 use std::{
-	env,
-	ffi::{c_char, c_double, c_void},
-	hint::cold_path,
-	ops::Sub,
-	path::Path,
-	sync::{
+	cmp::{max, min}, env, ffi::{c_char, c_double, c_void}, hint::cold_path, ops::Sub, path::Path, sync::{
 		LazyLock, Mutex, atomic::{self, AtomicBool, AtomicU32, AtomicUsize}
-	},
-	thread,
-	time::{self, Duration},
+	}, thread, time::{self, Duration}
 };
 use wayland_client::{
-	globals::registry_queue_init,
-	protocol::{wl_output, wl_shm, wl_surface},
-	Connection, QueueHandle,
+	Connection, QueueHandle, globals::registry_queue_init, protocol::{wl_output::{self, WlOutput}, wl_shm, wl_surface}
 };
 
 #[inline(always)]
@@ -60,6 +50,35 @@ pub const fn unlikely(b: bool) -> bool {
 		cold_path();
 	}
 	b
+}
+
+#[derive(Default, Clone, Copy)]
+struct Rect<T> {
+	/// top left corner
+	x1: T,
+	/// top left corner
+	y1: T,
+	/// bottom right corner
+	x2: T,
+	/// bottom right corner
+	y2: T
+}
+
+impl<T> Rect<T> where T: std::ops::Sub<Output = T> + std::cmp::PartialOrd {
+	#[inline(always)]
+	fn width(self) -> T {
+		self.x2 - self.x1
+	}
+
+	#[inline(always)]
+	fn height(self) -> T {
+		self.y2 - self.y1
+	}
+
+	#[inline(always)]
+	fn contains(self, val: Self) -> bool {
+		self.x1 <= val.x1 && self.y1 <= val.y2 && self.x2 >= val.x2 && self.y2 >= val.y2
+	}
 }
 
 struct ClientState {
@@ -72,6 +91,7 @@ struct ClientState {
 	width:           u32,
 	height:          u32,
 	layer:           LayerSurface,
+	global_space:    Rect<i32>,
 }
 
 impl CompositorHandler for ClientState {
@@ -122,7 +142,6 @@ impl CompositorHandler for ClientState {
 	}
 }
 
-// TODO: handle new/destroyed outputs for multi-output wlneko
 impl OutputHandler for ClientState {
 	fn output_state(&mut self) -> &mut OutputState {
 		&mut self.output_state
@@ -134,23 +153,50 @@ impl OutputHandler for ClientState {
 		_qh: &QueueHandle<Self>,
 		output: wl_output::WlOutput,
 	) {
-		if let Some((x, y)) = self.output_state.info(&output).unwrap().logical_size {
-			// if your monitor has negative dimensions, good fucking luck
-			self.layer.set_size(x.try_into().unwrap(), y.try_into().unwrap());
-			self.layer.commit();
+		// no need to do anything if the new output falls within the existing global compositor space
+		if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output)
+			&& self.global_space.contains(Rect { x1: pos.0, y1: pos.1, x2: pos.0 + size.0, y2: pos.1 + size.1 }) {
+			return;
 		}
+
+		self.global_space = self.output_state.outputs().fold(Rect::<i32>::default(), |global_rect, output| {
+			if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output) {
+				let output_rect = Rect {x1: pos.0, y1: pos.1, x2: pos.0 + size.0, y2: pos.1 + size.1};
+				Rect {
+					x1: min(global_rect.x1, output_rect.x1),
+					y1: min(global_rect.y1, output_rect.y1),
+					x2: max(global_rect.x2, output_rect.x2),
+					y2: max(global_rect.y2, output_rect.y2),
+				}
+			} else {
+				global_rect
+			}
+		});
+		self.layer.set_size(self.global_space.width().try_into().unwrap(), self.global_space.height().try_into().unwrap());
+		self.layer.commit();
 	}
 
 	fn update_output(
 		&mut self,
 		_conn: &Connection,
 		_qh: &QueueHandle<Self>,
-		output: wl_output::WlOutput,
+		_output: WlOutput,
 	) {
-		if let Some((x, y)) = self.output_state.info(&output).unwrap().logical_size {
-			self.layer.set_size(x.try_into().unwrap(), y.try_into().unwrap());
-			self.layer.commit();
-		}
+		self.global_space = self.output_state.outputs().fold(Rect::<i32>::default(), |global_rect, output| {
+			if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output) {
+				let output_rect = Rect {x1: pos.0, y1: pos.1, x2: pos.0 + size.0, y2: pos.1 + size.1};
+				Rect {
+					x1: min(global_rect.x1, output_rect.x1),
+					y1: min(global_rect.y1, output_rect.y1),
+					x2: max(global_rect.x2, output_rect.x2),
+					y2: max(global_rect.y2, output_rect.y2),
+				}
+			} else {
+				global_rect
+			}
+		});
+		self.layer.set_size(self.global_space.width().try_into().unwrap(), self.global_space.height().try_into().unwrap());
+		self.layer.commit();
 	}
 
 	fn output_destroyed(
@@ -160,9 +206,25 @@ impl OutputHandler for ClientState {
 		_output: wl_output::WlOutput,
 	) {
 		if self.output_state.outputs().filter_map(|x| self.output_state.info(&x)).count() == 0 {
-			yap!("last output destroyed; exiting");
+			yap!("last usable output destroyed; exiting");
 			self.exit = true;
 		}
+
+		self.global_space = self.output_state.outputs().fold(Rect::<i32>::default(), |global_rect, output| {
+			if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output) {
+				let output_rect = Rect {x1: pos.0, y1: pos.1, x2: pos.0 + size.0, y2: pos.1 + size.1};
+				Rect {
+					x1: min(global_rect.x1, output_rect.x1),
+					y1: min(global_rect.y1, output_rect.y1),
+					x2: max(global_rect.x2, output_rect.x2),
+					y2: max(global_rect.y2, output_rect.y2),
+				}
+			} else {
+				global_rect
+			}
+		});
+		self.layer.set_size(self.global_space.width().try_into().unwrap(), self.global_space.height().try_into().unwrap());
+		self.layer.commit();
 	}
 }
 
@@ -204,7 +266,7 @@ impl ShmHandler for ClientState {
 impl ClientState {
 	pub fn draw(&mut self, qh: &QueueHandle<Self>) {
 		let frame_start = time::Instant::now();
-		
+
 		let width = self.width;
 		let height = self.height;
 		let stride = self.width as i32 * 4;
@@ -297,8 +359,8 @@ impl ClientState {
 			let x = (index % width as usize) as u32;
 			let y = (index / width as usize) as u32;
 
-			let x = x - nx as u32 + SPRITE_SIZE / 2;
-			let y = y - ny as u32 + SPRITE_SIZE / 2;
+			let x = x.wrapping_sub(nx as u32).wrapping_add(SPRITE_SIZE / 2);
+			let y = y.wrapping_sub(ny as u32).wrapping_add(SPRITE_SIZE / 2);
 
 			let (a, r, g, b) = if (nx..=nx + 31).contains(&(x as i64 + nx))
 				&& (ny..=ny + 31).contains(&(y as i64 + ny))
@@ -357,7 +419,10 @@ struct wlr_cursor {
 static INIT_ALREADY: AtomicBool = AtomicBool::new(false);
 
 static POINTER_COORDS: (AtomicF64, AtomicF64) = (AtomicF64::new(0.0), AtomicF64::new(0.0));
-static NEKO_COORDS: (AtomicU32, AtomicU32) = (AtomicU32::new(SPRITE_SIZE/2), AtomicU32::new(SPRITE_SIZE/2));
+static NEKO_COORDS: (AtomicU32, AtomicU32) = (
+	AtomicU32::new(SPRITE_SIZE / 2),
+	AtomicU32::new(SPRITE_SIZE / 2),
+);
 
 const SPRITE_SIZE: u32 = 32;
 const SPRITE_BORDER_WIDTH: u32 = 1;
@@ -431,7 +496,7 @@ const RTLD_NEXT: *const c_void = -1_isize as *const c_void;  // not specified by
 
 type WlrCursorMove = unsafe extern "C" fn(*const wlr_cursor, *const c_void, c_double, c_double);
 
-#[allow(non_upper_case_globals)]  // it's baaasically a function :)
+#[allow(non_upper_case_globals)] // it's baaasically a function :)
 static wlr_cursor_move: LazyLock<WlrCursorMove> = LazyLock::new(|| unsafe {
 	let real = dlsym(RTLD_NEXT, c"wlr_cursor_move".as_ptr());
 	if real.is_null() {
@@ -446,7 +511,7 @@ unsafe extern "C" fn hook(
 	dev: *const c_void,
 	delta_x: c_double,
 	delta_y: c_double,
-) {
+) { unsafe {
 	if unlikely(!INIT_ALREADY.swap(true, atomic::Ordering::Relaxed)) {
 		yap!("hit first cursor movement; attempting to init wayland client and set up hook");
 		thread::spawn(client_init);
@@ -456,7 +521,7 @@ unsafe extern "C" fn hook(
 	POINTER_COORDS.1.store((*cur).y, atomic::Ordering::SeqCst);
 
 	wlr_cursor_move(cur, dev, delta_x, delta_y);
-}
+}}
 
 #[macro_export]
 macro_rules! yap {
@@ -484,7 +549,7 @@ fn client_init() {
 		"{:#?}",
 		output_state.outputs().filter_map(|x| output_state.info(&x)).collect::<Vec<_>>()
 	);
-	let (size_x, size_y): (u32, u32) = (1920, 1080); // just a default, it'll get updated later
+	let (size_x, size_y): (u32, u32) = (1920, 1080);  // just a default, it'll get updated later
 
 	let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor unavailable");
 	let layer_shell = LayerShell::bind(&globals, &qh).expect("wlr_layer_shell unavailable");
@@ -517,6 +582,7 @@ fn client_init() {
 		width: size_x,
 		height: size_y,
 		layer,
+		global_space: Rect { x1: 0, y1: 0, x2: size_x as i32, y2: size_y as i32 }
 	};
 
 	let (watcher_tx, watcher_rx) = std::sync::mpsc::channel();
@@ -543,7 +609,7 @@ fn client_init() {
 					} if paths.len() == 1 && paths[0] == cwd.join("sheet.png") => {
 						yap!("potential spritesheet update detected");
 						skin_cat()
-					},
+					}
 					notify::Event {
 						kind: notify::EventKind::Other,
 						paths: _,

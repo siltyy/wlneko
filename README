@@ -56,15 +56,15 @@ wlneko will fall back to an embedded skin.
 Todo
 ----
 
-- span across multiple monitors instead of doing whatever it does right now
 - fix bugs
 
 
 Bugs
 ----
 
-under certain conditions, the sprite will change its visual direction long
-before actually moving in that direction. this is probably a simple fix.
+- under certain conditions, the sprite will change its visual direction long
+  before actually moving in that direction. this is probably a simple fix.
+- negative and overlapping screen coords make things unhappy. fix your outputs.
 
 
 Acknowledgements

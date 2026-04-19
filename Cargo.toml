@@ -3,8 +3,8 @@ name = "wlneko"
 authors = ["silt!"]
 description = "cat follow mouse (real)"
 license = "AGPL-3.0-or-later"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 
 [profile.release]
 opt-level = 3
