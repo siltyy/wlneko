@@ -3,8 +3,7 @@
                                   (c) 2024 silt
                             ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-{x,w,o}neko, blindly ported to wayland for wlroots-based compositors. definitely
-tested on compositors other than sway :)
+{x,w,o}neko, blindly ported to wayland for wlroots-based compositors.
 
 wlneko was brought into existence to prove that it could be; don't expect any
 fancy features and be thankful the compositor doesn't need to get restarted to
@@ -51,6 +50,15 @@ to grab the skins (very difficult!):
 wlneko will attempt to read its skin from `<working dir>/sheet.png`. if this
 file is updated, so too is the sprite. if at any point this process should fail,
 wlneko will fall back to an embedded skin.
+
+Compatibility
+-------------
+
+as mentioned at the top, only wlroots compositors are supported. cage and other
+simpler compositors not implementing `wlr_layer_shell` will not work, either.
+development work happens primarily on sway, but labwc and river do appear to
+work as well. further compatibility is out of scope for this codebase, but there
+are plans for a more solid foundation with broader compatibility.
 
 
 Todo
