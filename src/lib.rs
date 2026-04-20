@@ -128,7 +128,7 @@ impl CompositorHandler for ClientState {
 		_conn: &Connection,
 		_qh: &QueueHandle<Self>,
 		_surface: &wl_surface::WlSurface,
-		_output: &wl_output::WlOutput,
+		_output: &WlOutput,
 	) {
 	}
 
@@ -137,7 +137,7 @@ impl CompositorHandler for ClientState {
 		_conn: &Connection,
 		_qh: &QueueHandle<Self>,
 		_surface: &wl_surface::WlSurface,
-		_output: &wl_output::WlOutput,
+		_output: &WlOutput,
 	) {
 	}
 }
@@ -151,7 +151,7 @@ impl OutputHandler for ClientState {
 		&mut self,
 		_conn: &Connection,
 		_qh: &QueueHandle<Self>,
-		output: wl_output::WlOutput,
+		output: WlOutput,
 	) {
 		// no need to do anything if the new output falls within the existing global compositor space
 		if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output)
@@ -159,21 +159,7 @@ impl OutputHandler for ClientState {
 			return;
 		}
 
-		self.global_space = self.output_state.outputs().fold(Rect::<i32>::default(), |global_rect, output| {
-			if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output) {
-				let output_rect = Rect {x1: pos.0, y1: pos.1, x2: pos.0 + size.0, y2: pos.1 + size.1};
-				Rect {
-					x1: min(global_rect.x1, output_rect.x1),
-					y1: min(global_rect.y1, output_rect.y1),
-					x2: max(global_rect.x2, output_rect.x2),
-					y2: max(global_rect.y2, output_rect.y2),
-				}
-			} else {
-				global_rect
-			}
-		});
-		self.layer.set_size(self.global_space.width().try_into().unwrap(), self.global_space.height().try_into().unwrap());
-		self.layer.commit();
+		self.update_output(_conn, _qh, output);
 	}
 
 	fn update_output(
@@ -182,6 +168,7 @@ impl OutputHandler for ClientState {
 		_qh: &QueueHandle<Self>,
 		_output: WlOutput,
 	) {
+		// recalculate the bounding box over all outputs representing global compositor space
 		self.global_space = self.output_state.outputs().fold(Rect::<i32>::default(), |global_rect, output| {
 			if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output) {
 				let output_rect = Rect {x1: pos.0, y1: pos.1, x2: pos.0 + size.0, y2: pos.1 + size.1};
@@ -195,6 +182,8 @@ impl OutputHandler for ClientState {
 				global_rect
 			}
 		});
+
+		// send off the new rect size to the layer for resizing
 		self.layer.set_size(self.global_space.width().try_into().unwrap(), self.global_space.height().try_into().unwrap());
 		self.layer.commit();
 	}
@@ -203,28 +192,14 @@ impl OutputHandler for ClientState {
 		&mut self,
 		_conn: &Connection,
 		_qh: &QueueHandle<Self>,
-		_output: wl_output::WlOutput,
+		_output: WlOutput,
 	) {
 		if self.output_state.outputs().filter_map(|x| self.output_state.info(&x)).count() == 0 {
 			yap!("last usable output destroyed; exiting");
 			self.exit = true;
 		}
 
-		self.global_space = self.output_state.outputs().fold(Rect::<i32>::default(), |global_rect, output| {
-			if let Some(OutputInfo {logical_position: Some(pos), logical_size: Some(size), ..}) = self.output_state.info(&output) {
-				let output_rect = Rect {x1: pos.0, y1: pos.1, x2: pos.0 + size.0, y2: pos.1 + size.1};
-				Rect {
-					x1: min(global_rect.x1, output_rect.x1),
-					y1: min(global_rect.y1, output_rect.y1),
-					x2: max(global_rect.x2, output_rect.x2),
-					y2: max(global_rect.y2, output_rect.y2),
-				}
-			} else {
-				global_rect
-			}
-		});
-		self.layer.set_size(self.global_space.width().try_into().unwrap(), self.global_space.height().try_into().unwrap());
-		self.layer.commit();
+		self.update_output(_conn, _qh, _output);
 	}
 }
 
@@ -355,6 +330,7 @@ impl ClientState {
 		let spritesheet = SPRITESHEET.lock().unwrap();
 		let sprite = &spritesheet[spritesheet_idx];
 
+		// this sucks. draw() is slow because of this specifically.
 		canvas.chunks_exact_mut(4).enumerate().for_each(|(index, chunk)| {
 			let x = (index % width as usize) as u32;
 			let y = (index / width as usize) as u32;
